@@ -1,0 +1,220 @@
+// ZH Cargo — MySQL (Prisma 6). salePrice = purchasePrice + transportCost + margin (calcul côté app)
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+/// Catégories typiques: Électronique, Chaussures, Modes, Véhicules, Maison, Autres
+model Product {
+  id            String   @id @default(cuid())
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  name          String
+  category      String
+  description   String   @db.Text
+  /// JSON: tableau d’URLs d’images (sérialisé en string)
+  photos        String   @db.Text
+  /// ADMIN ONLY — ne pas exposer côté API public
+  purchasePrice Float
+  /// ADMIN ONLY
+  transportCost Float
+  /// ADMIN ONLY
+  margin        Float
+  /// = purchasePrice + transportCost + margin (maintenu par l’app)
+  salePrice     Float
+  moq           Int
+  deliveryDays  String
+  stock         Int
+  isActive      Boolean  @default(true)
+
+  orderItems OrderItem[]
+
+  @@map("products")
+}
+
+model Client {
+  id            String  @id @default(cuid())
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  phone         String  @unique
+  name          String?
+  country       String  @default("TG")
+  city          String?
+  neighborhood  String?
+  landmark      String?
+
+  orders    Order[]
+  settings  ClientSettings?
+
+  @@map("clients")
+}
+
+model SmsSent {
+  id        String   @id @default(cuid())
+  phone     String
+  type      String
+  message   String   @db.Text
+  status    String
+  twilioSid String?
+  error     String?
+  createdAt DateTime @default(now())
+
+  @@map("sms_sent")
+}
+
+model ClientSettings {
+  id               String   @id @default(cuid())
+  clientId         String   @unique
+  client           Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  smsNotifications Boolean  @default(true)
+  smsPromotions    Boolean  @default(true)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@map("client_settings")
+}
+
+model OtpCode {
+  id        String   @id @default(cuid())
+  phone     String
+  code      String
+  expiresAt DateTime
+  used      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([phone, code, used])
+  @@map("otp_codes")
+}
+
+model Order {
+  id                 String   @id @default(cuid())
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+  clientId           String
+  client             Client   @relation(fields: [clientId], references: [id])
+  status             OrderStatus @default(PENDING)
+  totalFcfa          Float
+  paymentOperator    String?
+  paymentReference   String?
+  internalNotes      String?  @db.Text
+  estimatedDelivery  String?
+  deliveryFullName     String?
+  deliveryCity         String?
+  deliveryNeighborhood String?
+  deliveryLandmark     String?  @db.Text
+  /// Réduction stock appliquée (évite le double prélèvement)
+  stockDecremented   Boolean  @default(false)
+  /// Fichier facture : /invoices/FACT-xxx.pdf
+  invoicePath        String?
+  /// Bénéfice calculé à la livraison
+  profitFcfa         Float?
+  items              OrderItem[]
+  payment            Payment?
+  statusHistory      OrderStatusHistory[]
+
+  @@index([clientId])
+  @@map("orders")
+}
+
+model OrderStatusHistory {
+  id        String   @id @default(cuid())
+  orderId   String
+  order     Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  status    String
+  note      String?
+  createdAt DateTime @default(now())
+
+  @@index([orderId, createdAt])
+  @@map("order_status_history")
+}
+
+model OrderItem {
+  id                String  @id @default(cuid())
+  orderId           String
+  order             Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productId         String
+  product           Product @relation(fields: [productId], references: [id], onDelete: Restrict)
+  quantity          Int
+  unitPriceFcfa     Float
+  subtotalFcfa      Float
+
+  @@index([orderId])
+  @@index([productId])
+  @@map("order_items")
+}
+
+model Payment {
+  id            String   @id @default(cuid())
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  orderId       String   @unique
+  order         Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  operator      String
+  amountFcfa    Float
+  status        PaymentStatus @default(PENDING)
+  transactionId String?
+  expiresAt     DateTime
+  /// Référence remboursement FedaPay (ou suivi local)
+  refundReference String?
+  refundReason    String?
+  refundedAt      DateTime?
+
+  @@map("payments")
+}
+
+model Partner {
+  id         String   @id @default(cuid())
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  name       String
+  role       String
+  percentage Float
+  isActive   Boolean  @default(true)
+
+  @@map("partners")
+}
+
+model RevenueSplit {
+  id               String   @id @default(cuid())
+  createdAt        DateTime @default(now())
+  periodStart      DateTime
+  periodEnd        DateTime
+  totalProfitFcfa  Float
+  /// JSON: répartition partenaires (sérialisé en string)
+  splits           String   @db.Text
+
+  @@map("revenue_splits")
+}
+
+model AdminUser {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  email     String   @unique
+  password  String
+  name      String
+  role      String   @default("admin")
+
+  @@map("admin_users")
+}
+
+enum OrderStatus {
+  PENDING
+  PAID
+  PROCESSING
+  TRANSIT
+  DELIVERED
+  CANCELLED
+}
+
+enum PaymentStatus {
+  PENDING
+  SUCCESS
+  FAILED
+  EXPIRED
+  REFUNDED
+}
