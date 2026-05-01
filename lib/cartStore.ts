@@ -18,14 +18,24 @@ export type CartAction =
   | { type: "ADD_ITEM"; payload: CartItem }
   | { type: "REMOVE_ITEM"; productId: string }
   | { type: "UPDATE_QUANTITY"; productId: string; quantity: number }
-  | { type: "CLEAR_CART" };
+  | { type: "CLEAR_CART" }
+  | { type: "HYDRATE"; items: CartItem[] };
 
 export function cartReducer(state: CartState, action: CartAction): CartState {
+  const cap = (q: number, item: CartItem) =>
+    Math.min(Math.max(item.moq, q), item.stock);
+
   switch (action.type) {
+    case "HYDRATE": {
+      return {
+        items: action.items.map((item) => ({
+          ...item,
+          quantity: cap(item.quantity, item),
+        })),
+      };
+    }
     case "ADD_ITEM": {
       const incoming = action.payload;
-      const cap = (q: number, item: CartItem) =>
-        Math.min(Math.max(item.moq, q), item.stock);
 
       const existing = state.items.find((i) => i.productId === incoming.productId);
       if (existing) {

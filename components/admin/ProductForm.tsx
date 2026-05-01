@@ -1,7 +1,7 @@
 "use client";
 
 import { PriceCalculator } from "@/components/admin/PriceCalculator";
-import { PRODUCT_CATEGORIES } from "@/lib/productConstants";
+import { PRODUCT_CATEGORIES, PRODUCT_SUBCATEGORIES } from "@/lib/productConstants";
 import { ImagePlus, Loader2, X } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -11,6 +11,7 @@ import toast from "react-hot-toast";
 export type ProductFormValues = {
   name: string;
   category: string;
+  subcategory: string;
   description: string;
   photos: string[];
   purchasePrice: number;
@@ -25,6 +26,7 @@ export type ProductFormValues = {
 const empty: ProductFormValues = {
   name: "",
   category: "Électronique",
+  subcategory: "",
   description: "",
   photos: [],
   purchasePrice: 0,
@@ -130,6 +132,7 @@ export function ProductForm({
       const body = {
         name: v.name.trim(),
         category: v.category,
+        subcategory: v.subcategory.trim() || undefined,
         description: v.description.trim(),
         photos: v.photos,
         purchasePrice: v.purchasePrice,
@@ -189,13 +192,32 @@ export function ProductForm({
               required
               className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm"
               value={v.category}
-              onChange={(e) => set({ category: e.target.value })}
+              onChange={(e) =>
+                set({ category: e.target.value, subcategory: "" })
+              }
             >
               {PRODUCT_CATEGORIES.map((c) => (
                 <option key={c} value={c}>
                   {c}
                 </option>
               ))}
+            </select>
+          </label>
+          <label className="block text-xs font-medium text-slate-600">
+            Sous-catégorie
+            <select
+              className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm"
+              value={v.subcategory}
+              onChange={(e) => set({ subcategory: e.target.value })}
+            >
+              <option value="">Aucune (optionnel)</option>
+              {(PRODUCT_SUBCATEGORIES[v.category as keyof typeof PRODUCT_SUBCATEGORIES] ?? []).map(
+                (s) => (
+                  <option key={s} value={s}>
+                    {s}
+                  </option>
+                ),
+              )}
             </select>
           </label>
           <label className="block text-xs font-medium text-slate-600">

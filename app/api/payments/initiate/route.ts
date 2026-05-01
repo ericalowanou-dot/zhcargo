@@ -2,6 +2,7 @@ import { authOptions } from "@/lib/auth";
 import { createTransactionAndSendNow } from "@/lib/fedapayClient";
 import { generateInvoiceNumber } from "@/lib/invoiceFormat";
 import { getOperatorById, getPaymentWaitHints } from "@/lib/mobileMoneyOperators";
+import { isPaymentSimulation } from "@/lib/paymentMode";
 import { markPaidAndShip } from "@/lib/paymentService";
 import { prisma } from "@/lib/prisma";
 import { sendOrderCancelled } from "@/lib/sms";
@@ -93,7 +94,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Opérateur invalide" }, { status: 400 });
   }
 
-  const paymentSimulation = process.env.PAYMENT_SIMULATION === "true";
+  const paymentSimulation = isPaymentSimulation();
   const simulationResult = (
     process.env.PAYMENT_SIMULATION_RESULT || "SUCCESS"
   ).toUpperCase();
@@ -120,7 +121,10 @@ export async function POST(request: Request) {
       await markPaidAndShip(order.id, simulatedTx);
       return NextResponse.json({
         transactionId: simulatedTx,
-        instructions: "Mode simulation: paiement confirmé automatiquement.",
+        simulated: true,
+        simulationOutcome: "SUCCESS" as const,
+        instructions:
+          "Mode test : paiement validé automatiquement. La facture PDF est générée (téléchargeable). En production, définissez PAYMENT_SIMULATION=false et configurez FedaPay.",
       });
     }
 
@@ -149,7 +153,9 @@ export async function POST(request: Request) {
       );
       return NextResponse.json({
         transactionId: simulatedTx,
-        instructions: "Mode simulation: paiement marqué comme échoué.",
+        simulated: true,
+        simulationOutcome: "FAILED" as const,
+        instructions: "Mode test : paiement marqué comme échoué.",
       });
     }
 
@@ -178,13 +184,17 @@ export async function POST(request: Request) {
       );
       return NextResponse.json({
         transactionId: simulatedTx,
-        instructions: "Mode simulation: paiement expiré.",
+        simulated: true,
+        simulationOutcome: "EXPIRED" as const,
+        instructions: "Mode test : paiement expiré.",
       });
     }
 
     return NextResponse.json({
       transactionId: simulatedTx,
-      instructions: "Mode simulation: paiement en attente.",
+      simulated: true,
+      simulationOutcome: "PENDING" as const,
+      instructions: "Mode test : paiement en attente.",
     });
   }
 

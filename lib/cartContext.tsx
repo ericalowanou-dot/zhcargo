@@ -3,10 +3,12 @@
 import { cartReducer, type CartItem } from "@/lib/cartStore";
 import {
   createContext,
+  useEffect,
   useCallback,
   useContext,
   useMemo,
   useReducer,
+  useRef,
   type ReactNode,
 } from "react";
 
@@ -25,9 +27,44 @@ type CartContextValue = {
 const CartContext = createContext<CartContextValue | null>(null);
 
 const initialState = { items: [] as CartItem[] };
+const CART_STORAGE_KEY = "zhcargo_cart_v1";
 
 export function CartProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(cartReducer, initialState);
+  const hydratedRef = useRef(false);
+  const skipFirstPersistRef = useRef(true);
+
+  useEffect(() => {
+    try {
+      const raw = window.localStorage.getItem(CART_STORAGE_KEY);
+      if (!raw) {
+        hydratedRef.current = true;
+        return;
+      }
+      const parsed = JSON.parse(raw) as CartItem[];
+      if (Array.isArray(parsed)) {
+        dispatch({ type: "HYDRATE", items: parsed });
+      }
+    } catch {
+      // Ignore corrupted local storage and start with an empty cart.
+    } finally {
+      hydratedRef.current = true;
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!hydratedRef.current) return;
+    // Evite d'écraser le localStorage avec [] au tout premier cycle post-hydratation.
+    if (skipFirstPersistRef.current) {
+      skipFirstPersistRef.current = false;
+      return;
+    }
+    try {
+      window.localStorage.setItem(CART_STORAGE_KEY, JSON.stringify(state.items));
+    } catch {
+      // Ignore storage write failures (private mode/quota).
+    }
+  }, [state.items]);
 
   const addItem = useCallback((item: CartItem) => {
     dispatch({ type: "ADD_ITEM", payload: item });

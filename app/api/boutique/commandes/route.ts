@@ -7,6 +7,7 @@ const productPublic = {
   id: true,
   name: true,
   category: true,
+  subcategory: true,
   description: true,
   photos: true,
   salePrice: true,

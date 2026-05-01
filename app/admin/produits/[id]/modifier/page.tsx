@@ -35,6 +35,7 @@ export default async function AdminModifierProduitPage({
   const initial: ProductFormValues = {
     name: product.name,
     category: product.category,
+    subcategory: product.subcategory ?? "",
     description: product.description,
     photos: parsePhotos(product.photos),
     purchasePrice: product.purchasePrice,

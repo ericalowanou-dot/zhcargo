@@ -13,6 +13,7 @@ export async function GET(
       id: true,
       name: true,
       category: true,
+      subcategory: true,
       photos: true,
       salePrice: true,
       moq: true,

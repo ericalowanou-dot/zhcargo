@@ -1,5 +1,6 @@
 import { authOptions } from "@/lib/auth";
 import { generateInvoiceNumber } from "@/lib/invoiceFormat";
+import { isPaymentSimulation } from "@/lib/paymentMode";
 import { syncOrderPayment } from "@/lib/paymentService";
 import { prisma } from "@/lib/prisma";
 import { sendOrderCancelled, sendOrderConfirmation } from "@/lib/sms";
@@ -16,7 +17,7 @@ export async function GET(
   }
 
   const { orderId } = params;
-  const paymentSimulation = process.env.PAYMENT_SIMULATION === "true";
+  const paymentSimulation = isPaymentSimulation();
   const order = await prisma.order.findFirst({
     where: { id: orderId, clientId: session.user.clientId },
     include: { client: true },

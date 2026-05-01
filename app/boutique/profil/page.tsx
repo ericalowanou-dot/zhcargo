@@ -2,23 +2,24 @@
 
 import { BottomNav } from "@/components/client/BottomNav";
 import { Header } from "@/components/client/Header";
-import { formatFcfa, generateInvoiceNumber } from "@/lib/invoiceFormat";
-import { Bell, Gift, Loader2, LogOut, Package, Pencil, User } from "lucide-react";
+import { formatDateOnly, formatFcfa, generateInvoiceNumber } from "@/lib/invoiceFormat";
+import { COUNTRY_OPTIONS } from "@/lib/phone-regions";
+import { Loader2, LogOut, UserRound } from "lucide-react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { signOut, useSession } from "next-auth/react";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import toast from "react-hot-toast";
 
-const COUNTRIES = [
-  { value: "TG", label: "Togo" },
-  { value: "BJ", label: "Bénin" },
-  { value: "CI", label: "Côte d'Ivoire" },
-  { value: "GA", label: "Gabon" },
-  { value: "BF", label: "Burkina Faso" },
-  { value: "SN", label: "Sénégal" },
-];
+type OrderLite = {
+  id: string;
+  status: string;
+  totalFcfa: number;
+  createdAt: string;
+  items: Array<{ quantity: number; product: { name: string } }>;
+};
 
-type Data = {
+type Payload = {
   client: {
     id: string;
     phone: string;
@@ -30,180 +31,279 @@ type Data = {
     createdAt: string;
   };
   stats: { ordersCount: number; deliveredCount: number; totalSpent: number };
-  recentOrders: Array<{ id: string; status: string; totalFcfa: number; createdAt: string; items: Array<{ quantity: number; product: { name: string } }> }>;
+  recentOrders: OrderLite[];
   settings: { smsNotifications: boolean; smsPromotions: boolean };
 };
 
 export default function ProfilPage() {
+  const router = useRouter();
   const { status } = useSession();
-  const [loading, setLoading] = useState(true);
-  const [data, setData] = useState<Data | null>(null);
-  const [showModal, setShowModal] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [form, setForm] = useState({ name: "", city: "", neighborhood: "", landmark: "", country: "TG" });
+  const [data, setData] = useState<Payload | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
-  const load = async () => {
-    setLoading(true);
-    const res = await fetch("/api/boutique/profil");
-    if (!res.ok) {
-      setLoading(false);
-      return;
+  const [name, setName] = useState("");
+  const [country, setCountry] = useState("TG");
+  const [city, setCity] = useState("");
+  const [neighborhood, setNeighborhood] = useState("");
+  const [landmark, setLandmark] = useState("");
+  const [smsNotifications, setSmsNotifications] = useState(true);
+  const [smsPromotions, setSmsPromotions] = useState(true);
+
+  const [saving, setSaving] = useState(false);
+
+  const load = useCallback(async () => {
+    setLoadError(null);
+    try {
+      const res = await fetch("/api/boutique/profil");
+      const j = (await res.json()) as Payload & { error?: string };
+      if (!res.ok) {
+        setLoadError(j.error || "Erreur de chargement");
+        setData(null);
+        return;
+      }
+      setData(j);
+      const c = j.client;
+      setName(c.name ?? "");
+      setCountry(c.country || "TG");
+      setCity(c.city ?? "");
+      setNeighborhood(c.neighborhood ?? "");
+      setLandmark(c.landmark ?? "");
+      setSmsNotifications(j.settings.smsNotifications);
+      setSmsPromotions(j.settings.smsPromotions);
+    } catch {
+      setLoadError("Réseau indisponible");
+      setData(null);
     }
-    const d = (await res.json()) as Data;
-    setData(d);
-    setForm({
-      name: d.client.name || "",
-      city: d.client.city || "",
-      neighborhood: d.client.neighborhood || "",
-      landmark: d.client.landmark || "",
-      country: d.client.country || "TG",
-    });
-    setLoading(false);
-  };
+  }, []);
 
   useEffect(() => {
-    if (status === "authenticated") void load();
-  }, [status]);
+    if (status === "unauthenticated") {
+      router.replace("/auth/login?callbackUrl=/boutique/profil");
+      return;
+    }
+    if (status !== "authenticated") return;
+    load();
+  }, [status, router, load]);
 
-  const countryLabel = useMemo(
-    () => COUNTRIES.find((c) => c.value === data?.client.country)?.label || data?.client.country || "—",
-    [data?.client.country],
-  );
+  async function handleSave(e: React.FormEvent) {
+    e.preventDefault();
+    setSaving(true);
+    try {
+      const res = await fetch("/api/boutique/profil/update", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name,
+          country,
+          city,
+          neighborhood,
+          landmark,
+          smsNotifications,
+          smsPromotions,
+        }),
+      });
+      const j = (await res.json()) as { error?: string };
+      if (!res.ok) {
+        toast.error(j.error || "Enregistrement impossible");
+        return;
+      }
+      toast.success("Profil mis à jour");
+      await load();
+    } catch {
+      toast.error("Erreur réseau");
+    } finally {
+      setSaving(false);
+    }
+  }
 
-  if (status === "loading" || loading || !data) {
+  if (status === "loading" || (status === "authenticated" && !data && !loadError)) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-[#F8F9FA]">
         <Loader2 className="h-7 w-7 animate-spin text-[#1A3C6E]" />
       </div>
     );
   }
+  if (status === "unauthenticated") return null;
 
   return (
-    <main className="min-h-screen bg-[#F8F9FA] px-4 pb-10">
+    <div className="min-h-screen bg-[#F8F9FA] pb-[calc(5rem+env(safe-area-inset-bottom))]">
       <Header />
-      <h1 className="flex items-center gap-2 pt-4 text-lg font-extrabold text-[#1A3C6E]">
-        <User className="h-5 w-5" />
-        Mon Profil
-      </h1>
+      <div className="mx-auto max-w-lg px-4 pb-10 pt-6">
+        <h1 className="flex items-center gap-2 text-lg font-extrabold text-[#1A3C6E]">
+          <UserRound className="h-5 w-5" />
+          Mon profil
+        </h1>
 
-      <section className="mt-4 rounded-3xl bg-gradient-to-b from-[#1F5FBF] to-[#1A3C6E] p-4 text-white shadow-md">
-        <div className="flex items-start justify-between">
-          <div>
-            <p className="text-lg font-extrabold text-white">{data.client.name || "Client ZH Cargo"}</p>
-            <p className="text-sm text-white/90">{data.client.phone}</p>
-            <p className="text-xs text-white/80">{countryLabel}</p>
-          </div>
-          <button type="button" onClick={() => setShowModal(true)} className="inline-flex items-center gap-1 rounded-full border border-white/40 bg-white/15 px-3 py-1.5 text-xs font-medium text-white">
-            <Pencil className="h-3.5 w-3.5" /> Modifier
-          </button>
-        </div>
-      </section>
+        {loadError ? (
+          <p className="mt-4 rounded-xl border border-red-200 bg-red-50 px-3 py-3 text-sm text-red-800">{loadError}</p>
+        ) : null}
 
-      <section className="mt-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-        <h2 className="mb-2 text-sm font-bold text-slate-800">Mes statistiques</h2>
-        <div className="grid grid-cols-3 gap-2">
-          <div className="rounded-xl bg-slate-50 p-3 text-center">
-            <p className="inline-flex items-center gap-1 text-lg font-extrabold text-[#1A3C6E]"><Package className="h-4 w-4" />{data.stats.ordersCount}</p>
-            <p className="text-[11px] text-slate-500">Commandes</p>
-          </div>
-          <div className="rounded-xl bg-slate-50 p-3 text-center">
-            <p className="text-lg font-extrabold text-emerald-700">{data.stats.deliveredCount}</p>
-            <p className="text-[11px] text-slate-500">Livrées</p>
-          </div>
-          <div className="rounded-xl bg-slate-50 p-3 text-center">
-            <p className="text-base font-extrabold text-[#E67E22]">{formatFcfa(data.stats.totalSpent)}</p>
-            <p className="text-[11px] text-slate-500">Dépensés</p>
-          </div>
-        </div>
-      </section>
+        {data ? (
+          <>
+            <section className="mt-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Compte</p>
+              <p className="mt-2 text-sm text-slate-600">Téléphone</p>
+              <p className="text-base font-bold text-slate-900">{data.client.phone}</p>
+              <p className="mt-3 text-xs text-slate-500">
+                Membre depuis le {formatDateOnly(new Date(data.client.createdAt))}
+              </p>
+            </section>
 
-      <section className="mt-5">
-        <h2 className="mb-2 text-sm font-bold text-slate-800">Dernières commandes</h2>
-        <div className="space-y-2">
-          {data.recentOrders.map((o) => (
-            <article key={o.id} className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
-              <div className="flex justify-between gap-2">
-                <div>
-                  <p className="text-sm font-bold text-slate-900">#{generateInvoiceNumber(o.id)}</p>
-                  <p className="text-xs text-slate-500">{new Date(o.createdAt).toLocaleDateString("fr-FR")}</p>
+            <section className="mt-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Activité</p>
+              <dl className="mt-3 grid grid-cols-3 gap-2 text-center">
+                <div className="rounded-xl bg-slate-50 py-2">
+                  <dt className="text-[10px] uppercase text-slate-500">Commandes</dt>
+                  <dd className="text-lg font-extrabold text-[#1A3C6E]">{data.stats.ordersCount}</dd>
                 </div>
-                <p className="text-sm font-extrabold text-[#E67E22]">{formatFcfa(o.totalFcfa)}</p>
-              </div>
-              <p className="mt-1 text-xs text-slate-600">{o.status}</p>
-            </article>
-          ))}
-        </div>
-        <Link href="/boutique/commandes" className="mt-3 inline-block text-sm font-semibold text-[#1A3C6E]">
-          Voir toutes mes commandes →
-        </Link>
-      </section>
+                <div className="rounded-xl bg-slate-50 py-2">
+                  <dt className="text-[10px] uppercase text-slate-500">Livrées</dt>
+                  <dd className="text-lg font-extrabold text-emerald-700">{data.stats.deliveredCount}</dd>
+                </div>
+                <div className="rounded-xl bg-slate-50 py-2">
+                  <dt className="text-[10px] uppercase text-slate-500">Achats</dt>
+                  <dd className="text-sm font-extrabold leading-tight text-[#E67E22]">
+                    {formatFcfa(data.stats.totalSpent)}
+                  </dd>
+                </div>
+              </dl>
+            </section>
 
-      <section className="mt-5 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-        <h2 className="text-sm font-bold text-slate-800">Paramètres</h2>
-        <div className="mt-3 space-y-3">
-          <label className="flex items-center justify-between gap-2 text-sm text-slate-700">
-            <span className="inline-flex items-center gap-1"><Bell className="h-4 w-4" />Recevoir les SMS de suivi</span>
-            <input type="checkbox" checked={data.settings.smsNotifications} onChange={() => {}} />
-          </label>
-          <label className="flex items-center justify-between gap-2 text-sm text-slate-700">
-            <span className="inline-flex items-center gap-1"><Gift className="h-4 w-4" />Recevoir les offres promotionnelles</span>
-            <input type="checkbox" checked={data.settings.smsPromotions} onChange={() => {}} />
-          </label>
-          <button
-            type="button"
-            className="w-full rounded-lg bg-red-600 px-3 py-2 text-sm font-semibold text-white"
-            onClick={async () => {
-              await fetch("/api/auth/logout", { method: "POST" });
-              await signOut({ callbackUrl: "/boutique" });
-            }}
-          >
-            <span className="inline-flex items-center gap-1"><LogOut className="h-4 w-4" />Se déconnecter</span>
-          </button>
-        </div>
-      </section>
+            <form onSubmit={handleSave} className="mt-4 space-y-4">
+              <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                  Coordonnées
+                </p>
+                <label className="mt-3 block text-xs font-semibold text-slate-600">
+                  Nom affiché
+                  <input
+                    className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    placeholder="Votre nom"
+                  />
+                </label>
+                <label className="mt-3 block text-xs font-semibold text-slate-600">
+                  Pays
+                  <select
+                    className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm"
+                    value={country}
+                    onChange={(e) => setCountry(e.target.value)}
+                  >
+                    {COUNTRY_OPTIONS.map((c) => (
+                      <option key={c.iso} value={c.iso}>
+                        {c.flag} {c.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="mt-3 block text-xs font-semibold text-slate-600">
+                  Ville
+                  <input
+                    className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm"
+                    value={city}
+                    onChange={(e) => setCity(e.target.value)}
+                  />
+                </label>
+                <label className="mt-3 block text-xs font-semibold text-slate-600">
+                  Quartier
+                  <input
+                    className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm"
+                    value={neighborhood}
+                    onChange={(e) => setNeighborhood(e.target.value)}
+                  />
+                </label>
+                <label className="mt-3 block text-xs font-semibold text-slate-600">
+                  Repère
+                  <textarea
+                    className="mt-1 min-h-[72px] w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm"
+                    value={landmark}
+                    onChange={(e) => setLandmark(e.target.value)}
+                  />
+                </label>
+              </section>
 
-      {showModal ? (
-        <div className="fixed inset-0 z-50 flex items-end bg-black/40 p-3 sm:items-center sm:justify-center">
-          <div className="w-full max-w-md rounded-2xl bg-white p-4 shadow-xl">
-            <h3 className="text-base font-bold text-slate-900">Modifier le profil</h3>
-            <div className="mt-3 space-y-2">
-              <input className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm" placeholder="Nom complet" value={form.name} onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))} />
-              <input className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm" placeholder="Ville" value={form.city} onChange={(e) => setForm((p) => ({ ...p, city: e.target.value }))} />
-              <input className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm" placeholder="Quartier" value={form.neighborhood} onChange={(e) => setForm((p) => ({ ...p, neighborhood: e.target.value }))} />
-              <textarea className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm" placeholder="Point de repère" value={form.landmark} onChange={(e) => setForm((p) => ({ ...p, landmark: e.target.value }))} />
-            </div>
-            <div className="mt-3 flex gap-2">
-              <button type="button" onClick={() => setShowModal(false)} className="flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700">
-                Annuler
-              </button>
+              <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                  Notifications SMS
+                </p>
+                <label className="mt-3 flex cursor-pointer items-center justify-between gap-3 border-b border-slate-100 pb-3">
+                  <span className="text-sm text-slate-700">Commandes et livraisons</span>
+                  <input
+                    type="checkbox"
+                    className="h-5 w-5 accent-[#1A3C6E]"
+                    checked={smsNotifications}
+                    onChange={(e) => setSmsNotifications(e.target.checked)}
+                  />
+                </label>
+                <label className="flex cursor-pointer items-center justify-between gap-3 pt-3">
+                  <span className="text-sm text-slate-700">Promotions</span>
+                  <input
+                    type="checkbox"
+                    className="h-5 w-5 accent-[#1A3C6E]"
+                    checked={smsPromotions}
+                    onChange={(e) => setSmsPromotions(e.target.checked)}
+                  />
+                </label>
+              </section>
+
               <button
-                type="button"
+                type="submit"
                 disabled={saving}
-                className="flex-1 rounded-lg bg-[#1A3C6E] px-3 py-2 text-sm font-semibold text-white"
-                onClick={async () => {
-                  setSaving(true);
-                  const res = await fetch("/api/boutique/profil/update", {
-                    method: "PUT",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify(form),
-                  });
-                  setSaving(false);
-                  if (!res.ok) {
-                    toast.error("Mise à jour impossible");
-                    return;
-                  }
-                  toast.success("Profil mis à jour");
-                  setShowModal(false);
-                  await load();
-                }}
+                className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#1A3C6E] py-3 text-sm font-semibold text-white disabled:opacity-60"
               >
-                Sauvegarder
+                {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                Enregistrer
               </button>
-            </div>
-          </div>
-        </div>
-      ) : null}
-      <BottomNav active="profil" />
-    </main>
+            </form>
+
+            <section className="mt-6">
+              <div className="flex items-center justify-between">
+                <p className="text-sm font-bold text-[#1A3C6E]">Dernières commandes</p>
+                <Link href="/boutique/commandes" className="text-xs font-semibold text-[#E67E22]">
+                  Voir tout
+                </Link>
+              </div>
+              {data.recentOrders.length === 0 ? (
+                <p className="mt-3 rounded-xl border border-dashed border-slate-200 bg-white py-6 text-center text-sm text-slate-500">
+                  Aucune commande pour le moment
+                </p>
+              ) : (
+                <ul className="mt-3 flex flex-col gap-2">
+                  {data.recentOrders.map((o) => (
+                    <li
+                      key={o.id}
+                      className="rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm shadow-sm"
+                    >
+                      <div className="flex justify-between gap-2">
+                        <span className="font-semibold text-slate-900">
+                          #{generateInvoiceNumber(o.id)}
+                        </span>
+                        <span className="font-bold text-[#E67E22]">{formatFcfa(o.totalFcfa)}</span>
+                      </div>
+                      <p className="mt-1 text-xs text-slate-500">{formatDateOnly(new Date(o.createdAt))}</p>
+                      <p className="mt-1 line-clamp-1 text-xs text-slate-600">
+                        {o.items.map((i) => `${i.quantity}× ${i.product.name}`).join(", ")}
+                      </p>
+                      <p className="mt-2 text-[10px] uppercase tracking-wide text-slate-400">{o.status}</p>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
+
+            <button
+              type="button"
+              onClick={() => signOut({ callbackUrl: "/boutique" })}
+              className="mt-8 flex w-full items-center justify-center gap-2 rounded-xl border-2 border-slate-300 bg-white py-3 text-sm font-semibold text-slate-700"
+            >
+              <LogOut className="h-4 w-4" />
+              Déconnexion
+            </button>
+          </>
+        ) : null}
+      </div>
+      <BottomNav />
+    </div>
   );
 }

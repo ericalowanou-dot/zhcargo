@@ -28,6 +28,7 @@ type Row = {
   id: string;
   name: string;
   category: string;
+  subcategory?: string | null;
   purchasePrice: number;
   transportCost: number;
   margin: number;
@@ -300,7 +301,12 @@ export function ProduitsList() {
                     <td className="px-2 py-2 font-medium text-slate-900 max-w-[180px] truncate">
                       {p.name}
                     </td>
-                    <td className="px-2 py-2 text-slate-600">{p.category}</td>
+                    <td className="px-2 py-2 text-slate-600">
+                      {p.category}
+                      {p.subcategory ? (
+                        <span className="block text-xs text-slate-400">{p.subcategory}</span>
+                      ) : null}
+                    </td>
                     <td className="px-2 py-2 font-medium text-[#E67E22]">
                       {formatFcfa(p.purchasePrice)}
                     </td>

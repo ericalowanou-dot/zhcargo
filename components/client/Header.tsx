@@ -2,6 +2,7 @@
 
 import { CartIcon } from "@/components/client/CartIcon";
 import { phoneInitials } from "@/lib/phone-regions";
+import { Search, User } from "lucide-react";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
 
@@ -12,15 +13,14 @@ export function Header() {
 
   return (
     <header className="sticky top-0 z-20 bg-[#1A3C6E] px-4 pb-3 pt-3 shadow-md">
-      <div className="mb-2 flex items-start justify-between gap-2">
-        <div className="min-w-0">
-          <p className="text-lg font-extrabold tracking-wide text-white">ZH CARGO</p>
-        </div>
-        <div className="flex shrink-0 items-center gap-2">
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-lg font-extrabold tracking-wide text-white">ZH CARGO</p>
+        <div className="flex shrink-0 items-center gap-1">
+          <CartIcon />
           {loggedIn && phone ? (
             <Link
               href="/boutique/profil"
-              className="flex h-9 w-9 items-center justify-center rounded-full bg-[#E67E22] text-xs font-bold text-white"
+              className="flex h-10 w-10 items-center justify-center rounded-full border-2 border-white/40 bg-[#E67E22] text-xs font-bold text-white"
               aria-label="Mon compte"
             >
               {phoneInitials(phone)}
@@ -28,19 +28,22 @@ export function Header() {
           ) : (
             <Link
               href="/auth/login"
-              className="text-xs font-semibold text-white underline decoration-white/40"
+              className="flex h-10 w-10 items-center justify-center rounded-full border-2 border-white/50 bg-white/10 text-white"
+              aria-label="Connexion"
             >
-              Mon compte
+              <User className="h-5 w-5" strokeWidth={2} />
             </Link>
           )}
-          <CartIcon />
         </div>
       </div>
-      <input
-        type="search"
-        placeholder="Rechercher un produit..."
-        className="w-full rounded-xl border border-white/20 bg-white/95 px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 outline-none ring-[#E67E22] focus:ring-2"
-      />
+      <label className="mt-3 flex items-center gap-2 rounded-xl border border-white/25 bg-white px-3 py-2.5 shadow-sm">
+        <Search className="h-4 w-4 shrink-0 text-slate-400" aria-hidden />
+        <input
+          type="search"
+          placeholder="Rechercher un produit..."
+          className="min-w-0 flex-1 bg-transparent text-sm text-slate-900 placeholder:text-slate-400 outline-none"
+        />
+      </label>
     </header>
   );
 }

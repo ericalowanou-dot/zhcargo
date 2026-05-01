@@ -1,5 +1,5 @@
 import { requireAdmin } from "@/lib/adminAuth";
-import { PRODUCT_CATEGORIES } from "@/lib/productConstants";
+import { PRODUCT_CATEGORIES, isValidSubcategory } from "@/lib/productConstants";
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 
@@ -44,6 +44,7 @@ export async function PUT(request: Request, { params }: Ctx) {
   const body = (await request.json()) as {
     name?: string;
     category?: string;
+    subcategory?: string;
     description?: string;
     photos?: string[];
     purchasePrice?: number;
@@ -57,6 +58,7 @@ export async function PUT(request: Request, { params }: Ctx) {
   const {
     name,
     category,
+    subcategory,
     description,
     photos,
     purchasePrice,
@@ -73,6 +75,9 @@ export async function PUT(request: Request, { params }: Ctx) {
   }
   if (category !== undefined && !PRODUCT_CATEGORIES.includes(category as (typeof PRODUCT_CATEGORIES)[number])) {
     return NextResponse.json({ error: "Catégorie invalide" }, { status: 400 });
+  }
+  if ((category !== undefined || subcategory !== undefined) && !isValidSubcategory(category ?? existing.category, subcategory)) {
+    return NextResponse.json({ error: "Sous-catégorie invalide" }, { status: 400 });
   }
   if (photos !== undefined) {
     if (!Array.isArray(photos) || photos.length > 5) {
@@ -99,6 +104,7 @@ export async function PUT(request: Request, { params }: Ctx) {
     data: {
       ...(name !== undefined ? { name: name.trim() } : {}),
       ...(category !== undefined ? { category } : {}),
+      ...(subcategory !== undefined ? { subcategory: subcategory?.trim() || null } : {}),
       ...(description !== undefined ? { description: description.trim() } : {}),
       ...(photos !== undefined ? { photos: serializePhotos(photos) } : {}),
       ...(purchasePrice !== undefined ? { purchasePrice } : {}),

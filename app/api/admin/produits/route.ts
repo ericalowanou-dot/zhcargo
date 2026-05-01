@@ -1,5 +1,8 @@
 import { requireAdmin } from "@/lib/adminAuth";
-import { PRODUCT_CATEGORIES } from "@/lib/productConstants";
+import {
+  PRODUCT_CATEGORIES,
+  isValidSubcategory,
+} from "@/lib/productConstants";
 import { prisma } from "@/lib/prisma";
 import type { Prisma } from "@prisma/client";
 import { NextRequest, NextResponse } from "next/server";
@@ -32,6 +35,7 @@ export async function GET(request: NextRequest) {
   const search = (searchParams.get("search") || "").trim();
   const category = (searchParams.get("category") || "").trim();
   const stock = (searchParams.get("stock") || "tous").trim();
+  const subcategory = (searchParams.get("subcategory") || "").trim();
 
   const where: Prisma.ProductWhereInput = {};
   if (search) {
@@ -44,6 +48,9 @@ export async function GET(request: NextRequest) {
     if (PRODUCT_CATEGORIES.includes(category as (typeof PRODUCT_CATEGORIES)[number])) {
       where.category = category;
     }
+  }
+  if (subcategory) {
+    where.subcategory = subcategory;
   }
   if (stock === "en_stock") {
     where.stock = { gt: 0 };
@@ -67,6 +74,7 @@ export async function GET(request: NextRequest) {
     id: p.id,
     name: p.name,
     category: p.category,
+    subcategory: p.subcategory,
     description: p.description,
     photos: parsePhotos(p.photos),
     purchasePrice: p.purchasePrice,
@@ -97,6 +105,7 @@ export async function POST(request: Request) {
   const body = (await request.json()) as {
     name?: string;
     category?: string;
+    subcategory?: string;
     description?: string;
     photos?: string[];
     purchasePrice?: number;
@@ -111,6 +120,7 @@ export async function POST(request: Request) {
   const {
     name,
     category,
+    subcategory,
     description,
     photos = [],
     purchasePrice,
@@ -130,6 +140,9 @@ export async function POST(request: Request) {
   }
   if (!PRODUCT_CATEGORIES.includes(category as (typeof PRODUCT_CATEGORIES)[number])) {
     return NextResponse.json({ error: "Catégorie invalide" }, { status: 400 });
+  }
+  if (!isValidSubcategory(category, subcategory)) {
+    return NextResponse.json({ error: "Sous-catégorie invalide" }, { status: 400 });
   }
   if (
     purchasePrice === undefined ||
@@ -165,6 +178,7 @@ export async function POST(request: Request) {
     data: {
       name: name.trim(),
       category,
+      subcategory: subcategory?.trim() || null,
       description: description.trim(),
       photos: serializePhotos(photos),
       purchasePrice,

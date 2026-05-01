@@ -15,6 +15,7 @@ model Product {
   updatedAt     DateTime @updatedAt
   name          String
   category      String
+  subcategory   String?
   description   String   @db.Text
   /// JSON: tableau d’URLs d’images (sérialisé en string)
   photos        String   @db.Text
@@ -33,6 +34,7 @@ model Product {
 
   orderItems OrderItem[]
 
+  @@index([category, subcategory])
   @@map("products")
 }
 
