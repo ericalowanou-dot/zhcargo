@@ -7,6 +7,7 @@ import { PromoCarousel } from "@/components/client/PromoCarousel";
 import { ProductCard } from "@/components/client/ProductCard";
 import { PRODUCT_SUBCATEGORIES } from "@/lib/productConstants";
 import { X } from "lucide-react";
+import { useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import toast from "react-hot-toast";
 
@@ -31,6 +32,8 @@ const CATEGORY_QUERY: Record<string, string> = {
 };
 
 export default function BoutiquePage() {
+  const searchParams = useSearchParams();
+  const searchQuery = (searchParams.get("q") ?? "").trim();
   const [activeCategory, setActiveCategory] = useState("Tous");
   const [activeSubcategory, setActiveSubcategory] = useState("");
   const [sheetOpen, setSheetOpen] = useState(false);
@@ -46,6 +49,7 @@ export default function BoutiquePage() {
         const params = new URLSearchParams();
         if (q) params.set("category", q);
         if (sq) params.set("subcategory", sq);
+        if (searchQuery) params.set("q", searchQuery);
         const query = params.toString();
         const url = query ? `/api/boutique/products?${query}` : "/api/boutique/products";
         const res = await fetch(url);
@@ -68,7 +72,7 @@ export default function BoutiquePage() {
       }
     };
     void fetchProducts();
-  }, [activeCategory, activeSubcategory]);
+  }, [activeCategory, activeSubcategory, searchQuery]);
 
   const visible = useMemo(() => products, [products]);
   const selectedCategoryLabel = activeCategory === "Tous" ? "Électronique" : activeCategory;
@@ -129,6 +133,13 @@ export default function BoutiquePage() {
       <Header />
       <CategoryPills activeCategory={activeCategory} onChange={openCategory} />
       <PromoCarousel />
+      {searchQuery ? (
+        <section className="px-4 pt-2">
+          <p className="rounded-xl border border-[#1A3C6E]/15 bg-white px-3 py-2 text-xs font-medium text-[#1A3C6E]">
+            Recherche: <span className="font-bold">{searchQuery}</span>
+          </p>
+        </section>
+      ) : null}
 
       {activeSubcategory ? (
         <section className="px-4 pt-2">

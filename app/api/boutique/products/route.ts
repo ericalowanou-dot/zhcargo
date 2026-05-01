@@ -6,12 +6,23 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const category = searchParams.get("category");
     const subcategory = searchParams.get("subcategory");
+    const search = searchParams.get("q")?.trim();
 
     const products = await prisma.product.findMany({
       where: {
         isActive: true,
         ...(category ? { category } : {}),
         ...(subcategory ? { subcategory } : {}),
+        ...(search
+          ? {
+              OR: [
+                { name: { contains: search } },
+                { description: { contains: search } },
+                { category: { contains: search } },
+                { subcategory: { contains: search } },
+              ],
+            }
+          : {}),
       },
       select: {
         id: true,

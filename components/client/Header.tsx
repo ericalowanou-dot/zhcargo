@@ -4,12 +4,33 @@ import { CartIcon } from "@/components/client/CartIcon";
 import { phoneInitials } from "@/lib/phone-regions";
 import { Search, User } from "lucide-react";
 import Link from "next/link";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
+import { FormEvent, useEffect, useState } from "react";
 
 export function Header() {
   const { data: session, status } = useSession();
   const loggedIn = status === "authenticated" && session?.user?.clientId;
   const phone = session?.user?.phone;
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const [query, setQuery] = useState("");
+
+  useEffect(() => {
+    setQuery(searchParams.get("q") ?? "");
+  }, [searchParams, pathname]);
+
+  function submitSearch(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const q = query.trim();
+    const params = new URLSearchParams();
+    if (q) params.set("q", q);
+    const target = params.toString()
+      ? `/boutique?${params.toString()}`
+      : "/boutique";
+    router.push(target);
+  }
 
   return (
     <header className="sticky top-0 z-20 bg-[#1A3C6E] px-4 pb-3 pt-3 shadow-md">
@@ -36,14 +57,25 @@ export function Header() {
           )}
         </div>
       </div>
-      <label className="mt-3 flex items-center gap-2 rounded-xl border border-white/25 bg-white px-3 py-2.5 shadow-sm">
+      <form
+        className="mt-3 flex items-center gap-2 rounded-xl border border-white/25 bg-white px-3 py-2.5 shadow-sm"
+        onSubmit={submitSearch}
+      >
         <Search className="h-4 w-4 shrink-0 text-slate-400" aria-hidden />
         <input
           type="search"
           placeholder="Rechercher un produit..."
           className="min-w-0 flex-1 bg-transparent text-sm text-slate-900 placeholder:text-slate-400 outline-none"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
         />
-      </label>
+        <button
+          type="submit"
+          className="rounded-lg px-2 py-1 text-xs font-semibold text-[#1A3C6E] hover:bg-slate-100"
+        >
+          Rechercher
+        </button>
+      </form>
     </header>
   );
 }
